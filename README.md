@@ -1,3 +1,244 @@
+# Regional EMBER Dataset Splitter for Federated Learning
+
+This project provides tools to split the EMBER malware dataset into regional partitions for federated learning research. It processes the original EMBER dataset into multiple regional datasets with specific characteristics and separates benign samples into their own folder.
+
+## Overview
+
+The project consists of three main components:
+
+1. **Data Preparation** - Processes the raw EMBER dataset files into a suitable format for splitting
+2. **Regional Splitting** - Divides the malware samples into regional partitions based on feature clustering
+3. **Federated Learning** - Enables training models across the regional partitions
+
+## Prerequisites
+
+- Python 3.6+
+- EMBER dataset (2018 version) with feature version 2
+- Required Python packages (install with `pip install -r requirements.txt`):
+  - numpy
+  - scikit-learn
+  - pandas
+  - matplotlib
+  - seaborn
+  - pickle (built-in)
+
+## Installation
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/FaultyJuggler/ember_simulate_regional.git
+   cd ember_simulate_regional
+   ```
+
+2. Install the dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Download the EMBER dataset or make sure you have access to the dataset files.
+
+## Input Data
+
+### Required Input Files
+
+The code expects the EMBER 2018 dataset in one of the following formats:
+
+1. **Pickle files**:
+   - `X_train.pkl` - Feature vectors
+   - `y_train.pkl` - Labels
+
+2. **DAT files**:
+   - `X_train.dat` - Feature vectors in raw format
+   - `y_train.dat` - Labels in raw format
+
+3. **JSONL files**:
+   - `train_features_0.jsonl` through `train_features_5.jsonl` - Raw features in JSON format
+
+These files should be placed in a directory structure like:
+```
+data/
+└── ember2018/
+    ├── X_train.dat (or .pkl)
+    ├── y_train.dat (or .pkl)
+    ├── train_features_0.jsonl
+    ├── train_features_1.jsonl
+    ...
+```
+
+## Usage
+
+### Step 1: Prepare the EMBER Dataset
+
+First, prepare the EMBER dataset by converting the raw files to pickle format:
+
+```bash
+python prepare_ember.py --data-dir /path/to/ember/data
+```
+
+This will:
+- Load the EMBER dataset from various formats (pickle, dat, jsonl)
+- Process the data and save it in pickle format for faster access
+- Provide statistics about the dataset (benign vs. malware distribution)
+
+### Step 2: Split the Dataset into Regional Partitions
+
+After preparing the dataset, split it into regional partitions:
+
+```bash
+python run_split_for_regional_FL.py --data-dir /path/to/ember/data --output-dir /path/to/output
+```
+
+This will:
+- Create 3 regional datasets (US, JP, EU) based on feature clustering of malware samples
+- Place all benign samples in a separate "benign" folder
+- Generate metadata about the regional distribution
+
+### Advanced Options
+
+You can specify the data directory and output directory as command-line arguments:
+
+```bash
+python run_split_for_regional_FL.py --data-dir=/path/to/ember/data --output-dir=/path/to/output
+```
+
+## Output Structure
+
+After running the scripts, the following directory structure will be created:
+
+```
+/path/to/output/
+├── benign/
+│   ├── X_train.pkl
+│   └── y_train.pkl
+├── region_US/
+│   ├── X_train.pkl
+│   └── y_train.pkl
+├── region_JP/
+│   ├── X_train.pkl
+│   └── y_train.pkl
+├── region_EU/
+│   ├── X_train.pkl
+│   └── y_train.pkl
+├── metadata.json
+├── malware_pca_visualization.png
+└── malware_clusters_visualization.png
+```
+
+### Output Files Description
+
+1. **Regional Data Files**:
+   - Each region (US, JP, EU) has its own directory containing:
+     - `X_train.pkl`: Feature vectors for malware samples in this region
+     - `y_train.pkl`: Labels for malware samples (all set to 1)
+
+2. **Benign Data**:
+   - The `benign/` directory contains:
+     - `X_train.pkl`: Feature vectors for all benign samples
+     - `y_train.pkl`: Labels for benign samples (all set to 0)
+
+3. **Metadata and Visualizations**:
+   - `metadata.json`: JSON file containing information about the regional split
+   - `malware_pca_visualization.png`: PCA visualization of the malware samples
+   - `malware_clusters_visualization.png`: Visualization of the clustered regional malware samples
+
+## Metadata Format
+
+The `metadata.json` file contains the following information:
+
+```json
+{
+  "total_samples": 800000,
+  "num_regions": 3,
+  "feature_dim": 2381,
+  "benign_samples": 600000,
+  "malware_samples": 200000,
+  "is_synthetic_malware": false,
+  "regions": {
+    "US": {
+      "num_samples": 70000,
+      "num_malware": 70000,
+      "feature_centroid": [...]
+    },
+    "JP": {
+      "num_samples": 65000,
+      "num_malware": 65000,
+      "feature_centroid": [...]
+    },
+    "EU": {
+      "num_samples": 65000,
+      "num_malware": 65000,
+      "feature_centroid": [...]
+    }
+  }
+}
+```
+
+## Using the Split Dataset for Federated Learning
+
+After splitting the dataset, you can use the resulting regional data for federated learning research. Each region can be treated as a separate client in a federated learning setup.
+
+Example code for using the regional data in a federated learning project:
+
+```python
+import pickle
+import os
+
+# Load data for each region
+regions = ["US", "JP", "EU"]
+data = {}
+
+for region in regions:
+    region_dir = os.path.join("/path/to/output", f"region_{region}")
+    
+    # Load X and y
+    with open(os.path.join(region_dir, "X_train.pkl"), 'rb') as f:
+        X = pickle.load(f)
+    
+    with open(os.path.join(region_dir, "y_train.pkl"), 'rb') as f:
+        y = pickle.load(f)
+    
+    data[region] = {"X": X, "y": y}
+
+# Load benign data
+benign_dir = os.path.join("/path/to/output", "benign")
+with open(os.path.join(benign_dir, "X_train.pkl"), 'rb') as f:
+    X_benign = pickle.load(f)
+
+with open(os.path.join(benign_dir, "y_train.pkl"), 'rb') as f:
+    y_benign = pickle.load(f)
+
+data["benign"] = {"X": X_benign, "y": y_benign}
+
+# Now you can use this data for federated learning
+```
+
+## Troubleshooting
+
+### No Malware Samples Found
+
+If no malware samples are found in your dataset, the script will automatically generate synthetic malware samples for demonstration purposes. This is done by perturbing benign samples to create malware-like samples.
+
+### Directory Structure Issues
+
+If the script cannot find the EMBER dataset, make sure the directory structure is correct and that the required files exist. The script looks for the dataset in several common locations:
+
+- `./data/ember2018/`
+- `./ember/data/ember2018/`
+- The current directory
+
+## References
+
+This project uses the EMBER dataset:
+
+- H. Anderson and P. Roth, "EMBER: An Open Dataset for Training Static PE Malware Machine Learning Models", in ArXiv e-prints. Apr. 2018.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+
+
+
 <img src="resources/logo.png" align="right" width="250px" height="250px">
 
 # Elastic Malware Benchmark for Empowering Researchers
